@@ -1,0 +1,34 @@
+# Level OS - Git ignore file
+
+# Build artifacts
+build/
+*.bin
+*.iso
+*.o
+*.elf
+
+# Cross-compiler artifacts
+*.a
+*.so
+
+# Editor and IDE files
+.vscode/
+.vs/
+*.swp
+*.swo
+*~
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# Debug files
+*.debug
+*.map
+
+# Log files
+*.log
+
+# Temporary files
+tmp/
+temp/
