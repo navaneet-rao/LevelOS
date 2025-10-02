@@ -1,0 +1,79 @@
+name: "CodeQL Code Scanning"
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  schedule:
+    - cron: '22 1 * * 6'  # Weekly scan on Saturdays
+
+jobs:
+  analyze:
+    name: Analyze
+    runs-on: self-hosted
+    timeout-minutes: 360
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [ 'c-cpp' ]
+        # CodeQL supports [ 'c-cpp', 'csharp', 'go', 'java-kotlin', 'javascript-typescript', 'python', 'ruby', 'swift' ]
+        # Use only 'java-kotlin' to analyze code written in Java, Kotlin or both
+        # Use only 'javascript-typescript' to analyze code written in JavaScript, TypeScript or both
+        # Learn more about CodeQL language support at https://aka.ms/codeql-docs/language-support
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v3
+      with:
+        languages: ${{ matrix.language }}
+        # If you wish to specify custom queries, you can do so here or in a config file.
+        # By default, queries listed here will override any specified in a config file.
+        # Prefix the list here with "+" to use these queries and those in the config file.
+
+        # For more details on CodeQL's query packs, refer to: https://docs.github.com/en/code-security/code-scanning/automatically-scanning-your-code-for-vulnerabilities-and-errors/configuring-code-scanning#using-queries-in-ql-packs
+        # queries: security-extended,security-and-quality
+
+    - name: Check Dependencies for Build
+      run: |
+        echo "Checking build dependencies for CodeQL analysis..."
+        
+        # Check if core build tools are available
+        if ! command -v gcc >/dev/null 2>&1 || ! command -v nasm >/dev/null 2>&1; then
+          echo "Essential build tools missing, CodeQL analysis may be limited"
+          echo "Installing basic dependencies..."
+          # Try to install without sudo first, fall back if needed
+          if ! apt update 2>/dev/null && ! sudo apt update 2>/dev/null; then
+            echo "Cannot update package lists"
+          fi
+          
+          if ! apt install -y build-essential nasm 2>/dev/null && ! sudo apt install -y build-essential nasm 2>/dev/null; then
+            echo "Cannot install build dependencies, proceeding with limited analysis"
+          fi
+        fi
+
+    - name: Autobuild
+      uses: github/codeql-action/autobuild@v3
+      # ℹ️ Command-line programs to run using the OS shell.
+      # 📚 See https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsrun
+
+    # Alternative to autobuild - if autobuild fails, use manual build
+    # - name: Manual Build
+    #   run: |
+    #     echo "Manual build for CodeQL analysis..."
+    #     make clean
+    #     make lib
+    #     make
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v3
+      with:
+        category: "/language:${{matrix.language}}"
