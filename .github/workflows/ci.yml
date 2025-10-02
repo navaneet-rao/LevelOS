@@ -53,12 +53,54 @@ jobs:
     - name: Checkout Repository
       uses: actions/checkout@v4
       
-    - name: Install Dependencies
+    - name: Check Dependencies
       run: |
-        echo "Installing build dependencies..."
-        sudo apt update
-        sudo apt install -y build-essential nasm grub-pc-bin grub-common xorriso qemu-system-x86
-        echo "Dependencies installed successfully"
+        echo "Checking build dependencies..."
+        
+        # Check required tools
+        echo "Checking for required build tools:"
+        
+        if command -v gcc >/dev/null 2>&1; then
+          echo "✅ GCC: $(gcc --version | head -n1)"
+        else
+          echo "❌ GCC not found"
+        fi
+        
+        if command -v nasm >/dev/null 2>&1; then
+          echo "✅ NASM: $(nasm --version)"
+        else
+          echo "❌ NASM not found"
+        fi
+        
+        if command -v grub-mkrescue >/dev/null 2>&1; then
+          echo "✅ GRUB tools available"
+        else
+          echo "⚠️  GRUB tools not found (ISO creation may fail)"
+        fi
+        
+        if command -v xorriso >/dev/null 2>&1; then
+          echo "✅ Xorriso available"
+        else
+          echo "⚠️  Xorriso not found (ISO creation may fail)"
+        fi
+        
+        if command -v qemu-system-i386 >/dev/null 2>&1; then
+          echo "✅ QEMU: $(qemu-system-i386 --version | head -n1)"
+        else
+          echo "⚠️  QEMU not found (boot testing may fail)"
+        fi
+        
+        # Check if core build tools are available
+        if ! command -v gcc >/dev/null 2>&1 || ! command -v nasm >/dev/null 2>&1; then
+          echo ""
+          echo "❌ Essential build tools missing!"
+          echo "Please install dependencies on your runner:"
+          echo "sudo apt update && sudo apt install -y build-essential nasm grub-pc-bin grub-common xorriso qemu-system-x86"
+          exit 1
+        fi
+        
+        echo ""
+        echo "✅ Core build dependencies satisfied"
         
     - name: Get Version Information
       run: |
@@ -127,10 +169,22 @@ jobs:
     - name: Create Bootable ISO
       run: |
         echo "Creating bootable ISO..."
-        make iso || echo "ISO creation attempted"
-        echo "ISO creation completed"
+        
+        # Check if GRUB tools are available
+        if command -v grub-mkrescue >/dev/null 2>&1 && command -v xorriso >/dev/null 2>&1; then
+          echo "GRUB tools available, creating ISO..."
+          if make iso; then
+            echo "✅ ISO creation successful"
+          else
+            echo "❌ ISO creation failed"
+          fi
+        else
+          echo "⚠️  GRUB tools not available, skipping ISO creation"
+          echo "To enable ISO creation, install: sudo apt install grub-pc-bin grub-common xorriso"
+        fi
         
         # List what was actually created
+        echo "Build directory contents:"
         ls -la build/ || echo "Build directory listing failed"
         
     - name: Verify Multiboot Compliance
@@ -176,9 +230,17 @@ jobs:
     - name: Test Kernel Boot (QEMU)
       run: |
         echo "Testing kernel boot in QEMU (headless)..."
-        # Run QEMU with timeout and capture output
-        timeout 10s qemu-system-i386 -kernel build/level-os-*.bin -nographic -serial stdio -display none 2>&1 || echo "Boot test completed"
-        echo "QEMU boot test finished"
+        
+        # Check if QEMU is available
+        if command -v qemu-system-i386 >/dev/null 2>&1; then
+          echo "QEMU available, running boot test..."
+          # Run QEMU with timeout and capture output
+          timeout 10s qemu-system-i386 -kernel build/level-os-*.bin -nographic -serial stdio -display none 2>&1 || echo "Boot test completed"
+          echo "✅ QEMU boot test finished"
+        else
+          echo "⚠️  QEMU not available, skipping boot test"
+          echo "To enable boot testing, install: sudo apt install qemu-system-x86"
+        fi
 
   # Job 5: Verification and Summary
   verify:
