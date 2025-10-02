@@ -38,7 +38,7 @@ cd /opt/actions-runner
 # When prompted:
 # - Runner group: [Enter] (default)
 # - Runner name: levelOS-build-server (or your choice)
-# - Work folder: [Enter] (default)  
+# - Work folder: [Enter] (default)
 # - Labels: [Enter] (default)
 ```
 
@@ -70,7 +70,7 @@ ls -la levelOS.iso  # Should exist if build successful
 
 **Minimum Specs:**
 - 2+ CPU cores
-- 4GB+ RAM  
+- 4GB+ RAM
 - 20GB+ free disk space
 - Internet connection
 
