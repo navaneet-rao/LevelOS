@@ -32,3 +32,10 @@ Thumbs.db
 # Temporary files
 tmp/
 temp/
+
+# GitHub Actions artifacts
+release-assets/
+release-notes.md
+package.json
+checksums.txt
+build-info.txt
