@@ -104,10 +104,12 @@ jobs:
         
     - name: Get Version Information
       run: |
-        MAJOR=$(grep "VERSION_MAJOR = " Makefile | cut -d' ' -f3)
-        MINOR=$(grep "VERSION_MINOR = " Makefile | cut -d' ' -f3)
-        PATCH=$(grep "VERSION_PATCH = " Makefile | cut -d' ' -f3)
+        MAJOR=$(grep "VERSION_MAJOR = " Makefile | cut -d' ' -f3 | tr -d '\r\n' | tr -d ' ')
+        MINOR=$(grep "VERSION_MINOR = " Makefile | cut -d' ' -f3 | tr -d '\r\n' | tr -d ' ')
+        PATCH=$(grep "VERSION_PATCH = " Makefile | cut -d' ' -f3 | tr -d '\r\n' | tr -d ' ')
         VERSION="${MAJOR}.${MINOR}.${PATCH}"
+        # Clean version string of any special characters
+        VERSION=$(echo "$VERSION" | tr -d '\r\n\t ' | sed 's/[^0-9.]//g')
         echo "VERSION=${VERSION}" >> $GITHUB_ENV
         echo "Building LevelOS v${VERSION}"
         
@@ -148,10 +150,12 @@ jobs:
         
     - name: Get Version Information
       run: |
-        MAJOR=$(grep "VERSION_MAJOR = " Makefile | cut -d' ' -f3)
-        MINOR=$(grep "VERSION_MINOR = " Makefile | cut -d' ' -f3)
-        PATCH=$(grep "VERSION_PATCH = " Makefile | cut -d' ' -f3)
+        MAJOR=$(grep "VERSION_MAJOR = " Makefile | cut -d' ' -f3 | tr -d '\r\n' | tr -d ' ')
+        MINOR=$(grep "VERSION_MINOR = " Makefile | cut -d' ' -f3 | tr -d '\r\n' | tr -d ' ')
+        PATCH=$(grep "VERSION_PATCH = " Makefile | cut -d' ' -f3 | tr -d '\r\n' | tr -d ' ')
         VERSION="${MAJOR}.${MINOR}.${PATCH}"
+        # Clean version string of any special characters
+        VERSION=$(echo "$VERSION" | tr -d '\r\n\t ' | sed 's/[^0-9.]//g')
         echo "VERSION=${VERSION}" >> $GITHUB_ENV
         
     - name: Download Build Artifacts
@@ -210,10 +214,12 @@ jobs:
         
     - name: Get Version Information
       run: |
-        MAJOR=$(grep "VERSION_MAJOR = " Makefile | cut -d' ' -f3)
-        MINOR=$(grep "VERSION_MINOR = " Makefile | cut -d' ' -f3)
-        PATCH=$(grep "VERSION_PATCH = " Makefile | cut -d' ' -f3)
+        MAJOR=$(grep "VERSION_MAJOR = " Makefile | cut -d' ' -f3 | tr -d '\r\n' | tr -d ' ')
+        MINOR=$(grep "VERSION_MINOR = " Makefile | cut -d' ' -f3 | tr -d '\r\n' | tr -d ' ')
+        PATCH=$(grep "VERSION_PATCH = " Makefile | cut -d' ' -f3 | tr -d '\r\n' | tr -d ' ')
         VERSION="${MAJOR}.${MINOR}.${PATCH}"
+        # Clean version string of any special characters
+        VERSION=$(echo "$VERSION" | tr -d '\r\n\t ' | sed 's/[^0-9.]//g')
         echo "VERSION=${VERSION}" >> $GITHUB_ENV
         
     - name: Download Build Artifacts
