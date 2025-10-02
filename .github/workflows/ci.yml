@@ -17,6 +17,37 @@ jobs:
     - name: Checkout Repository
       uses: actions/checkout@v4
       
+    - name: Install Build Dependencies
+      run: |
+        echo "🔧 Installing LevelOS CI dependencies..."
+        
+        # Update package list
+        sudo apt update
+        
+        # Install essential build tools
+        sudo apt install -y \
+          build-essential \
+          gcc \
+          gcc-multilib \
+          nasm \
+          grub-pc-bin \
+          grub-common \
+          xorriso \
+          qemu-system-x86 \
+          mtools \
+          git \
+          make \
+          binutils \
+          libc6-dev-i386
+        
+        # Verify installations
+        echo "✅ Dependency check:"
+        gcc --version | head -1
+        nasm --version
+        make --version | head -1
+        
+        echo "🎯 CI environment ready!"
+        
     - name: Setup Build Environment
       run: |
         echo "Setting up LevelOS build environment for CI..."
