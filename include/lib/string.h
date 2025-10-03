@@ -10,7 +10,7 @@
 // String functions
 size_t strlen(const char* str);
 
-// Memory functions  
+// Memory functions
 void* memset(void* dest, int value, size_t count);
 void* memcpy(void* dest, const void* src, size_t count);
 int memcmp(const void* ptr1, const void* ptr2, size_t count);

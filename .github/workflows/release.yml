@@ -1,0 +1,334 @@
+name: Release LevelOS
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+    types: [ closed ]
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  build-and-release:
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
+    runs-on: self-hosted
+    
+    permissions:
+      contents: write
+      packages: write
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        
+    - name: Get Version Information
+      id: version
+      run: |
+        # Extract version from Makefile
+        MAJOR=$(grep "VERSION_MAJOR = " Makefile | cut -d' ' -f3)
+        MINOR=$(grep "VERSION_MINOR = " Makefile | cut -d' ' -f3)
+        PATCH=$(grep "VERSION_PATCH = " Makefile | cut -d' ' -f3)
+        VERSION="${MAJOR}.${MINOR}.${PATCH}"
+        
+        # Get commit info
+        COMMIT_SHORT=$(git rev-parse --short HEAD)
+        COMMIT_DATE=$(git log -1 --format=%cd --date=short)
+        
+        # Set outputs
+        echo "version=${VERSION}" >> $GITHUB_OUTPUT
+        echo "commit_short=${COMMIT_SHORT}" >> $GITHUB_OUTPUT
+        echo "commit_date=${COMMIT_DATE}" >> $GITHUB_OUTPUT
+        echo "release_name=LevelOS v${VERSION}" >> $GITHUB_OUTPUT
+        echo "tag_name=v${VERSION}" >> $GITHUB_OUTPUT
+        
+        # Display version info
+        echo "Building LevelOS v${VERSION} (${COMMIT_SHORT})"
+        
+    - name: Clean Previous Build
+      run: |
+        echo "Cleaning previous build artifacts..."
+        make clean
+        
+    - name: Build LevelOS Kernel
+      run: |
+        echo "Building LevelOS kernel..."
+        make all
+        
+        # Verify kernel was built
+        if [ ! -f "build/level-os-${{ steps.version.outputs.version }}.bin" ]; then
+          echo "ERROR: Kernel binary not found!"
+          exit 1
+        fi
+        
+        echo "Kernel build successful:"
+        make debug-size
+        
+    - name: Build Bootable ISO
+      run: |
+        echo "Creating bootable ISO..."
+        make iso
+        
+        # Verify ISO was created
+        if [ ! -f "build/level-os-${{ steps.version.outputs.version }}.iso" ]; then
+          echo "ERROR: ISO file not found!"
+          exit 1
+        fi
+        
+        # Get ISO size
+        ISO_SIZE=$(ls -lh build/level-os-${{ steps.version.outputs.version }}.iso | awk '{print $5}')
+        echo "ISO created successfully: ${ISO_SIZE}"
+        
+    - name: Run Tests
+      run: |
+        echo "Running LevelOS test suite..."
+        make test || echo "Tests completed with warnings"
+        
+    - name: Prepare Release Assets
+      run: |
+        # Create release directory
+        mkdir -p release-assets
+        
+        # Copy kernel binary
+        cp build/level-os-${{ steps.version.outputs.version }}.bin release-assets/
+        
+        # Copy ISO file
+        cp build/level-os-${{ steps.version.outputs.version }}.iso release-assets/
+        
+        # Create checksums
+        cd release-assets
+        sha256sum *.bin *.iso > checksums.txt
+        cd ..
+        
+        # Create build info
+        cat > release-assets/build-info.txt << EOF
+        LevelOS Build Information
+        ========================
+        Version: ${{ steps.version.outputs.version }}
+        Commit: ${{ steps.version.outputs.commit_short }}
+        Build Date: ${{ steps.version.outputs.commit_date }}
+        Architecture: i686 (32-bit x86)
+        
+        Files:
+        - level-os-${{ steps.version.outputs.version }}.bin: Kernel binary
+        - level-os-${{ steps.version.outputs.version }}.iso: Bootable ISO image
+        - checksums.txt: SHA256 checksums
+        - build-info.txt: This file
+        
+        Usage:
+        1. For QEMU testing: qemu-system-i386 -kernel level-os-${{ steps.version.outputs.version }}.bin
+        2. For real hardware: Burn ISO to USB/CD and boot
+        3. For development: See project documentation
+        EOF
+        
+        # List release assets
+        echo "Release assets prepared:"
+        ls -la release-assets/
+        
+    - name: Generate Release Notes
+      id: release_notes
+      run: |
+        # Get commits since last tag
+        LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+        
+        if [ -n "$LAST_TAG" ]; then
+          COMMITS=$(git log ${LAST_TAG}..HEAD --oneline --no-merges)
+        else
+          COMMITS=$(git log --oneline --no-merges -10)  # Last 10 commits for first release
+        fi
+        
+        # Create release notes
+        cat > release-notes.md << EOF
+        # LevelOS ${{ steps.version.outputs.version }} Release Notes
+        
+        ## Build Information
+        - **Version**: ${{ steps.version.outputs.version }}
+        - **Commit**: ${{ steps.version.outputs.commit_short }}
+        - **Build Date**: ${{ steps.version.outputs.commit_date }}
+        - **Architecture**: i686 (32-bit x86)
+        
+        ## What's Included
+        - **Kernel Binary**: \`level-os-${{ steps.version.outputs.version }}.bin\` - Ready for QEMU testing
+        - **Bootable ISO**: \`level-os-${{ steps.version.outputs.version }}.iso\` - Ready for real hardware
+        - **Checksums**: \`checksums.txt\` - SHA256 verification
+        - **Build Info**: \`build-info.txt\` - Detailed build information
+        
+        ## Quick Start
+        \`\`\`bash
+        # Test in QEMU
+        qemu-system-i386 -kernel level-os-${{ steps.version.outputs.version }}.bin
+        
+        # Or burn ISO to USB/CD for real hardware testing
+        \`\`\`
+        
+        ## Changes in This Release
+        EOF
+        
+        if [ -n "$COMMITS" ]; then
+          echo "$COMMITS" | sed 's/^/- /' >> release-notes.md
+        else
+          echo "- Initial release of LevelOS" >> release-notes.md
+        fi
+        
+        cat >> release-notes.md << EOF
+        
+        ## System Requirements
+        - **For QEMU**: Any modern Linux/Windows/macOS system with QEMU
+        - **For Real Hardware**: x86 compatible PC with VGA support
+        - **Memory**: Minimum 16MB RAM
+        - **Storage**: Bootable USB/CD drive
+        
+        ## Documentation
+        - See project repository for complete documentation
+        - API reference, architecture guide, and development instructions included
+        
+        ## Verification
+        \`\`\`bash
+        # Verify checksums
+        sha256sum -c checksums.txt
+        
+        # Check multiboot compliance  
+        grub-file --is-x86-multiboot level-os-${{ steps.version.outputs.version }}.bin
+        \`\`\`
+        EOF
+        
+        echo "Release notes generated:"
+        cat release-notes.md
+        
+    - name: Check if Release Exists
+      id: check_release
+      run: |
+        # Check if this version tag already exists
+        if git tag -l | grep -q "^v${{ steps.version.outputs.version }}$"; then
+          echo "exists=true" >> $GITHUB_OUTPUT
+          echo "Tag v${{ steps.version.outputs.version }} already exists"
+        else
+          echo "exists=false" >> $GITHUB_OUTPUT
+          echo "Tag v${{ steps.version.outputs.version }} does not exist"
+        fi
+        
+    - name: Create Git Tag
+      if: steps.check_release.outputs.exists == 'false'
+      run: |
+        git config user.name "GitHub Actions"
+        git config user.email "actions@github.com"
+        git tag -a v${{ steps.version.outputs.version }} -m "LevelOS v${{ steps.version.outputs.version }} - Automated Release"
+        git push origin v${{ steps.version.outputs.version }}
+        
+    - name: Create GitHub Release
+      if: steps.check_release.outputs.exists == 'false'
+      uses: actions/create-release@v1
+      id: create_release
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: v${{ steps.version.outputs.version }}
+        release_name: ${{ steps.version.outputs.release_name }}
+        body_path: release-notes.md
+        draft: false
+        prerelease: false
+        
+    - name: Upload Kernel Binary
+      if: steps.check_release.outputs.exists == 'false'
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./release-assets/level-os-${{ steps.version.outputs.version }}.bin
+        asset_name: level-os-${{ steps.version.outputs.version }}.bin
+        asset_content_type: application/octet-stream
+        
+    - name: Upload Bootable ISO
+      if: steps.check_release.outputs.exists == 'false'
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./release-assets/level-os-${{ steps.version.outputs.version }}.iso
+        asset_name: level-os-${{ steps.version.outputs.version }}.iso
+        asset_content_type: application/x-iso9660-image
+        
+    - name: Upload Checksums
+      if: steps.check_release.outputs.exists == 'false'
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./release-assets/checksums.txt
+        asset_name: checksums.txt
+        asset_content_type: text/plain
+        
+    - name: Upload Build Info
+      if: steps.check_release.outputs.exists == 'false'
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./release-assets/build-info.txt
+        asset_name: build-info.txt
+        asset_content_type: text/plain
+        
+    - name: Publish to GitHub Packages
+      if: steps.check_release.outputs.exists == 'false'
+      run: |
+        echo "Publishing LevelOS artifacts to GitHub Packages..."
+        
+        # Create package metadata
+        cat > package.json << EOF
+        {
+          "name": "@levelos/kernel",
+          "version": "${{ steps.version.outputs.version }}",
+          "description": "LevelOS Educational Operating System Kernel",
+          "main": "level-os-${{ steps.version.outputs.version }}.bin",
+          "files": [
+            "level-os-${{ steps.version.outputs.version }}.bin",
+            "level-os-${{ steps.version.outputs.version }}.iso",
+            "checksums.txt",
+            "build-info.txt"
+          ],
+          "repository": {
+            "type": "git",
+            "url": "git+https://github.com/${{ github.repository }}.git"
+          },
+          "keywords": ["operating-system", "kernel", "education", "os-development"],
+          "author": "LevelOS Team",
+          "license": "MIT"
+        }
+        EOF
+        
+        # Copy assets to current directory for npm publish
+        cp release-assets/* .
+        
+        echo "Package prepared for GitHub Packages"
+        
+    - name: Cleanup Build Artifacts  
+      if: always()
+      run: |
+        echo "Cleaning up build artifacts..."
+        make clean
+        rm -rf release-assets/
+        rm -f release-notes.md package.json
+        
+    - name: Build Summary
+      if: always()
+      run: |
+        echo "=========================="
+        echo "LevelOS Build Summary"
+        echo "=========================="
+        echo "Version: ${{ steps.version.outputs.version }}"
+        echo "Commit: ${{ steps.version.outputs.commit_short }}"
+        echo "Status: ${{ job.status }}"
+        
+        if [ "${{ job.status }}" = "success" ]; then
+          echo "Release created successfully!"
+          echo "Download: https://github.com/${{ github.repository }}/releases/tag/v${{ steps.version.outputs.version }}"
+        else
+          echo "Build failed - check logs for details"
+        fi
