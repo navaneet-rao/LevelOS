@@ -1,5 +1,8 @@
 # Level OS - Git ignore file
 
+# Version files (KEEP THESE IN GIT!)
+# VERSION and BUILD_NUMBER are tracked and should be committed
+
 # Build artifacts
 build/
 *.bin

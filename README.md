@@ -1,7 +1,7 @@
 # LevelOS
 
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen)]()
-[![Version](https://img.shields.io/badge/version-0.1.0-blue)]()
+[![Version](https://img.shields.io/badge/version-0.2.0-blue)]()
 [![License](https://img.shields.io/badge/license-MIT-green)]()
 [![Architecture](https://img.shields.io/badge/arch-i686-orange)]()
 
@@ -48,6 +48,7 @@ LevelOS/
 │   ├── kernel/               # Kernel API headers  
 │   └── lib/                  # Library headers (types.h, string.h)
 ├── 📂 config/                # Configuration files
+├── VERSION                   # Version file (single source of truth)
 │   ├── build.conf           # Build system configuration
 │   ├── test.conf            # Testing framework configuration
 │   └── linker.ld            # GNU LD linker script
@@ -62,8 +63,8 @@ LevelOS/
 │   ├── architecture.md      # System architecture documentation
 │   └── development.md       # Development guidelines
 └── 📂 build/                 # Build output (auto-generated)
-    ├── level-os-0.1.0.bin   # Final kernel binary
-    ├── level-os-0.1.0.iso   # Bootable ISO image
+    ├── level-os-0.2.0.bin   # Final kernel binary
+    ├── level-os-0.2.0.iso   # Bootable ISO image
     └── obj/                  # Object files
 ```
 
@@ -176,12 +177,12 @@ Then connect with any VNC client to `<server-ip>:5900`
 
 ### Physical Hardware
 1. Create bootable ISO: `make iso`
-2. Burn `build/level-os-0.1.0.iso` to USB/CD
+2. Burn `build/level-os-0.2.0.iso` to USB/CD
 3. Boot from USB/CD on target machine
 
 ## 📊 Development Status
 
-### Current Version: 0.1.0
+### Current Version: 0.2.0
 
 **Implemented Features:**
 - ✅ Multiboot-compliant bootloader
@@ -270,7 +271,7 @@ make clean && make run-vnc
 **Multiboot Error**
 ```bash
 # Verify multiboot compliance
-grub-file --is-x86-multiboot build/level-os-0.1.0.bin
+grub-file --is-x86-multiboot build/level-os-0.2.0.bin
 ```
 
 ### Debug Information

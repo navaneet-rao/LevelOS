@@ -1,11 +1,25 @@
 # Level OS - Makefile
 # Build system for Level OS kernel
 
-# Version information
-VERSION_MAJOR = 0
-VERSION_MINOR = 1
-VERSION_PATCH = 1
-VERSION = $(VERSION_MAJOR).$(VERSION_MINOR).$(VERSION_PATCH)
+# ============================================================================
+# VERSION MANAGEMENT
+# ============================================================================
+# Single source of truth for versioning
+# - CODE VERSION: Read from VERSION file (semantic versioning: major.minor.patch)
+# - BUILD NUMBER: Read from BUILD_NUMBER file (incremental build counter)
+# ============================================================================
+
+# Read version from VERSION file
+VERSION := $(shell cat VERSION 2>/dev/null || echo "0.1.1")
+VERSION_MAJOR := $(shell cat VERSION 2>/dev/null | cut -d. -f1 || echo "0")
+VERSION_MINOR := $(shell cat VERSION 2>/dev/null | cut -d. -f2 || echo "1")
+VERSION_PATCH := $(shell cat VERSION 2>/dev/null | cut -d. -f3 || echo "1")
+
+# Read build number from BUILD_NUMBER file
+BUILD_NUMBER := $(shell cat BUILD_NUMBER 2>/dev/null || echo "1")
+
+# Full version string with build number
+FULL_VERSION = $(VERSION)+build$(BUILD_NUMBER)
 
 # Default target architecture
 DEFAULT_HOST = i686-elf
@@ -30,7 +44,8 @@ LD = gcc
 
 # Compiler flags
 CFLAGS = -std=gnu99 -ffreestanding -O2 -Wall -Wextra -I$(INCDIR) -m32 \
-         -DVERSION_MAJOR=$(VERSION_MAJOR) -DVERSION_MINOR=$(VERSION_MINOR) -DVERSION_PATCH=$(VERSION_PATCH)
+         -DVERSION_MAJOR=$(VERSION_MAJOR) -DVERSION_MINOR=$(VERSION_MINOR) \
+         -DVERSION_PATCH=$(VERSION_PATCH) -DBUILD_NUMBER=$(BUILD_NUMBER)
 ASFLAGS = -felf32
 LDFLAGS = -ffreestanding -O2 -nostdlib -lgcc -m32
 
@@ -140,16 +155,88 @@ install-deps:
 	sudo apt update
 	sudo apt install build-essential nasm grub-pc-bin grub-common xorriso qemu-system-x86
 
+# ============================================================================
+# VERSION MANAGEMENT TARGETS
+# ============================================================================
+
 # Show version information
 version:
-	@echo "LevelOS Version $(VERSION)"
+	@echo "╔════════════════════════════════════════════════════╗"
+	@echo "║          LevelOS Version Information               ║"
+	@echo "╠════════════════════════════════════════════════════╣"
+	@echo "║ Code Version:   $(VERSION)                              ║"
+	@echo "║ Build Number:   $(BUILD_NUMBER)                                  ║"
+	@echo "║ Full Version:   $(FULL_VERSION)                       ║"
+	@echo "╚════════════════════════════════════════════════════╝"
+
+# Increment build number (call this before each build)
+bump-build:
+	@echo "Current build: $(BUILD_NUMBER)"
+	@echo $$(($(BUILD_NUMBER) + 1)) > BUILD_NUMBER
+	@echo "New build: $$(cat BUILD_NUMBER)"
+
+# Update patch version (e.g., 0.1.1 -> 0.1.2)
+bump-patch:
+	@echo "Current version: $(VERSION)"
+	@echo "$(VERSION_MAJOR).$(VERSION_MINOR).$$(($(VERSION_PATCH) + 1))" > VERSION
+	@echo "1" > BUILD_NUMBER
+	@echo "New version: $$(cat VERSION) (build reset to 1)"
+
+# Update minor version (e.g., 0.1.1 -> 0.2.0)
+bump-minor:
+	@echo "Current version: $(VERSION)"
+	@echo "$(VERSION_MAJOR).$$(($(VERSION_MINOR) + 1)).0" > VERSION
+	@echo "1" > BUILD_NUMBER
+	@echo "New version: $$(cat VERSION) (build reset to 1)"
+
+# Update major version (e.g., 0.1.1 -> 1.0.0)
+bump-major:
+	@echo "Current version: $(VERSION)"
+	@echo "$$(($(VERSION_MAJOR) + 1)).0.0" > VERSION
+	@echo "1" > BUILD_NUMBER
+	@echo "New version: $$(cat VERSION) (build reset to 1)"
+
+# Update documentation files with current version
+update-docs:
+	@echo "Updating documentation to version $(VERSION)..."
+	@if [ -f README.md.bak ]; then rm README.md.bak; fi
+	@if [ -f docs/development.md.bak ]; then rm docs/development.md.bak; fi
+	@if [ -f config/build.conf.bak ]; then rm config/build.conf.bak; fi
+	@# Find old version in README (look for badge version)
+	@OLD_VERSION=$$(grep -oP 'version-\K[0-9]+\.[0-9]+\.[0-9]+' README.md | head -1); \
+	if [ -n "$$OLD_VERSION" ]; then \
+		echo "  Old version: $$OLD_VERSION"; \
+		echo "  New version: $(VERSION)"; \
+		sed -i.bak "s/$$OLD_VERSION/$(VERSION)/g" README.md && \
+		sed -i.bak "s/level-os-$$OLD_VERSION/level-os-$(VERSION)/g" README.md && \
+		sed -i.bak "s/$$OLD_VERSION/$(VERSION)/g" docs/development.md && \
+		sed -i.bak "s/level-os-$$OLD_VERSION/level-os-$(VERSION)/g" docs/development.md && \
+		sed -i.bak "s/VERSION_MAJOR=[0-9]*/VERSION_MAJOR=$(VERSION_MAJOR)/g" config/build.conf && \
+		sed -i.bak "s/VERSION_MINOR=[0-9]*/VERSION_MINOR=$(VERSION_MINOR)/g" config/build.conf && \
+		sed -i.bak "s/VERSION_PATCH=[0-9]*/VERSION_PATCH=$(VERSION_PATCH)/g" config/build.conf && \
+		echo "  ✓ README.md updated"; \
+		echo "  ✓ docs/development.md updated"; \
+		echo "  ✓ config/build.conf updated"; \
+		rm -f README.md.bak docs/development.md.bak config/build.conf.bak; \
+	else \
+		echo "  ✗ Could not detect old version"; \
+	fi
+
+# Bump version and automatically update docs
+bump-patch-docs: bump-patch update-docs
+bump-minor-docs: bump-minor update-docs
+bump-major-docs: bump-major update-docs
+
+# ============================================================================
 
 # Show comprehensive system information  
 info:
 	@echo "=================================="
 	@echo "      LevelOS Build Information"
 	@echo "=================================="
-	@echo "Version: $(VERSION)"
+	@echo "Code Version: $(VERSION)"
+	@echo "Build Number: $(BUILD_NUMBER)"
+	@echo "Full Version: $(FULL_VERSION)"
 	@echo "Kernel Binary: $(KERNEL_BIN)"
 	@echo "ISO File: $(ISO_FILE)"
 	@echo ""
@@ -178,7 +265,7 @@ info:
 
 # Help target
 help:
-	@echo "LevelOS Build System v$(VERSION)"
+	@echo "LevelOS Build System v$(FULL_VERSION)"
 	@echo "================================"
 	@echo "Build Targets:"
 	@echo "  all        - Build the kernel (default)"
@@ -193,10 +280,22 @@ help:
 	@echo "Distribution:"
 	@echo "  iso        - Create bootable ISO"
 	@echo ""
+	@echo "Version Management:"
+	@echo "  version       - Show current version"
+	@echo "  bump-build    - Increment build number"
+	@echo "  bump-patch    - Increment patch version (0.1.1 -> 0.1.2)"
+	@echo "  bump-minor    - Increment minor version (0.1.1 -> 0.2.0)"
+	@echo "  bump-major    - Increment major version (0.1.1 -> 1.0.0)"
+	@echo ""
+	@echo "Documentation Updates:"
+	@echo "  update-docs        - Update README & docs with current VERSION"
+	@echo "  bump-patch-docs    - Bump patch + auto-update docs"
+	@echo "  bump-minor-docs    - Bump minor + auto-update docs"
+	@echo "  bump-major-docs    - Bump major + auto-update docs"
+	@echo ""
 	@echo "Development:"
 	@echo "  setup      - Setup development environment"
 	@echo "  debug      - Show debug options"
-	@echo "  version    - Show version"
 	@echo "  info       - Show build information"
 	@echo ""
 	@echo "Quick Start:"

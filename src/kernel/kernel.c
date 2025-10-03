@@ -19,37 +19,63 @@ void kernel_main(void)
 
     // Print version info from build system
     terminal_setcolor(vga_entry_color(VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK));
-    
+
     // Convert version numbers to strings and display
-    char version_str[32];
-    char major_str[8], minor_str[8], patch_str[8];
-    
+    char version_str[64];
+    char major_str[8], minor_str[8], patch_str[8], build_str[16];
+
     // Simple integer to string conversion
     int major = VERSION_MAJOR;
-    int minor = VERSION_MINOR; 
+    int minor = VERSION_MINOR;
     int patch = VERSION_PATCH;
-    
+    int build = BUILD_NUMBER;
+
     // Convert major version
     major_str[0] = '0' + major;
     major_str[1] = '\0';
-    
+
     // Convert minor version
     minor_str[0] = '0' + minor;
     minor_str[1] = '\0';
-    
+
     // Convert patch version
     patch_str[0] = '0' + patch;
     patch_str[1] = '\0';
-    
-    // Build version string: "major.minor.patch"  
+
+    // Convert build number (supports up to 99)
+    if (build < 10)
+    {
+        build_str[0] = '0' + build;
+        build_str[1] = '\0';
+    }
+    else
+    {
+        build_str[0] = '0' + (build / 10);
+        build_str[1] = '0' + (build % 10);
+        build_str[2] = '\0';
+    }
+
+    // Build version string: "major.minor.patch+buildN"
     int i = 0;
     version_str[i++] = major_str[0];
     version_str[i++] = '.';
     version_str[i++] = minor_str[0];
     version_str[i++] = '.';
     version_str[i++] = patch_str[0];
+    version_str[i++] = '+';
+    version_str[i++] = 'b';
+    version_str[i++] = 'u';
+    version_str[i++] = 'i';
+    version_str[i++] = 'l';
+    version_str[i++] = 'd';
+    // Copy build number
+    int j = 0;
+    while (build_str[j] != '\0')
+    {
+        version_str[i++] = build_str[j++];
+    }
     version_str[i] = '\0';
-    
+
     terminal_writestring(version_str);
 
     // Reset color and add some info

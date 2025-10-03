@@ -276,11 +276,11 @@ tools/debug.sh objdump
 #### QEMU Debugging
 ```bash
 # Run with GDB server
-qemu-system-i386 -kernel build/level-os-0.1.0.bin -s -S
+qemu-system-i386 -kernel build/level-os-0.2.0.bin -s -S
 
 # In another terminal
 gdb -ex "target remote localhost:1234" \
-    -ex "symbol-file build/level-os-0.1.0.bin"
+    -ex "symbol-file build/level-os-0.2.0.bin"
 ```
 
 ### Common Debug Commands
@@ -296,16 +296,16 @@ gdb -ex "target remote localhost:1234" \
 #### Memory Analysis
 ```bash
 # Examine ELF headers
-readelf -a build/level-os-0.1.0.bin
+readelf -a build/level-os-0.2.0.bin
 
 # Check multiboot compliance  
-grub-file --is-x86-multiboot build/level-os-0.1.0.bin
+grub-file --is-x86-multiboot build/level-os-0.2.0.bin
 
 # Hexdump binary
-hexdump -C build/level-os-0.1.0.bin | head
+hexdump -C build/level-os-0.2.0.bin | head
 ```
 
-## Adding New Features
+### Adding New Features
 
 ### Adding a New Driver
 
@@ -471,7 +471,7 @@ CFLAGS = -std=gnu99 -ffreestanding -O3 -m32 -DNDEBUG
 ```bash
 # Problem: "Warning: Not a valid multiboot file"
 # Solution: Check boot.s multiboot header
-grub-file --is-x86-multiboot build/level-os-0.1.0.bin
+grub-file --is-x86-multiboot build/level-os-0.2.0.bin
 ```
 
 #### Linking Errors
