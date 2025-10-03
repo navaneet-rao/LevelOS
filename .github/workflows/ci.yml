@@ -48,6 +48,8 @@ jobs:
   build:
     runs-on: self-hosted
     needs: code-quality  # Wait for code quality to pass
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     
     steps:
     - name: Checkout Repository
@@ -103,6 +105,7 @@ jobs:
         echo "✅ Core build dependencies satisfied"
         
     - name: Get Version Information
+      id: version
       run: |
         MAJOR=$(grep "VERSION_MAJOR = " Makefile | cut -d' ' -f3 | tr -d '\r\n' | tr -d ' ')
         MINOR=$(grep "VERSION_MINOR = " Makefile | cut -d' ' -f3 | tr -d '\r\n' | tr -d ' ')
@@ -111,6 +114,7 @@ jobs:
         # Clean version string of any special characters
         VERSION=$(echo "$VERSION" | tr -d '\r\n\t ' | sed 's/[^0-9.]//g')
         echo "VERSION=${VERSION}" >> $GITHUB_ENV
+        echo "version=${VERSION}" >> $GITHUB_OUTPUT
         echo "Building LevelOS v${VERSION}"
         
     - name: Clean Build Environment
@@ -142,7 +146,7 @@ jobs:
     - name: Upload Build Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: levelos-build-0.1.0
+        name: levelos-build-${{ steps.version.outputs.version }}
         path: |
           build/
         retention-days: 7
@@ -159,7 +163,7 @@ jobs:
     - name: Download Build Artifacts
       uses: actions/download-artifact@v4
       with:
-        name: levelos-build-0.1.0
+        name: levelos-build-${{ needs.build.outputs.version }}
         path: build/
         
     - name: Fix File Permissions
@@ -197,7 +201,7 @@ jobs:
     - name: Upload ISO Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: levelos-iso-0.1.0
+        name: levelos-iso-${{ needs.build.outputs.version }}
         path: build/level-os-*.iso
         retention-days: 7
 
@@ -213,7 +217,7 @@ jobs:
     - name: Download Build Artifacts
       uses: actions/download-artifact@v4
       with:
-        name: levelos-build-0.1.0
+        name: levelos-build-${{ needs.build.outputs.version }}
         path: build/
         
     - name: Run Unit Tests
@@ -255,7 +259,7 @@ jobs:
         make info
         
         # Check if kernel binary exists
-        if [ -f "levelos-build-0.1.0/level-os-"*.bin ] || [ -f "build/level-os-"*.bin ]; then
+        if [ -f "levelos-build-"*/level-os-*.bin ] || [ -f "build/level-os-"*.bin ]; then
           echo "✓ Kernel binary created"
         else
           echo "✗ Kernel binary missing"
@@ -266,7 +270,7 @@ jobs:
         fi
         
         # Check if ISO exists (don't fail if missing, just report)
-        if [ -f "levelos-iso-0.1.0/level-os-"*.iso ] || [ -f "build/level-os-"*.iso ]; then
+        if [ -f "levelos-iso-"*/level-os-*.iso ] || [ -f "build/level-os-"*.iso ]; then
           echo "✓ ISO image created"  
         else
           echo "⚠ ISO image missing (this may be expected if ISO creation failed)"
