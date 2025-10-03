@@ -38,7 +38,6 @@ release-assets/
 release-notes.md
 package.json
 checksums.txt
-build-info.txt
 
 # Setup and deployment files
 *.tar.gz
@@ -48,3 +47,4 @@ build-info.txt
 *.bak
 *.old
 *.tmp
+build-info.txt
