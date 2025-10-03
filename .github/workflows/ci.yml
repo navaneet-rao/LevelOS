@@ -131,15 +131,45 @@ jobs:
     - name: Build Kernel
       run: |
         echo "Building LevelOS kernel..."
-        make
-        echo "Kernel build completed successfully"
+        if make; then
+          echo "Kernel build completed successfully"
+          
+          # Verify the kernel was actually created
+          if [ -f build/level-os-*.bin ]; then
+            echo "✅ Kernel binary created: $(ls build/level-os-*.bin)"
+            ls -la build/level-os-*.bin
+          else
+            echo "❌ Kernel binary not found after build!"
+            echo "Build directory contents:"
+            ls -la build/
+            exit 1
+          fi
+        else
+          echo "❌ Kernel build failed!"
+          exit 1
+        fi
         
     - name: Verify Build Artifacts
       run: |
         echo "Verifying build artifacts before upload..."
+        
+        # Wait a moment for any lingering processes
+        sleep 2
+        
+        echo "Build directory contents:"
         ls -la build/
+        
         echo "Looking for kernel binary:"
-        find build/ -name "*.bin" -type f | head -5
+        if ls build/level-os-*.bin 1> /dev/null 2>&1; then
+          echo "✅ Found kernel binary:"
+          ls -la build/level-os-*.bin
+        else
+          echo "❌ No kernel binary found!"
+          echo "Available files in build/:"
+          find build/ -type f | head -10
+          exit 1
+        fi
+        
         echo "Checking build directory structure:"
         find build/ -type f | head -10
         
