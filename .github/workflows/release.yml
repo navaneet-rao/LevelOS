@@ -262,13 +262,20 @@ jobs:
       id: assets
       run: |
         # Get actual filenames for upload
-        KERNEL_FILE=$(ls release-assets/level-os-*.bin | head -1 | basename)
-        echo "kernel_file=${KERNEL_FILE}" >> $GITHUB_OUTPUT
-        echo "Kernel file: ${KERNEL_FILE}"
+        if ls release-assets/level-os-*.bin 1> /dev/null 2>&1; then
+          KERNEL_PATH=$(ls release-assets/level-os-*.bin | head -1)
+          KERNEL_FILE=$(basename "$KERNEL_PATH")
+          echo "kernel_file=${KERNEL_FILE}" >> $GITHUB_OUTPUT
+          echo "Kernel file: ${KERNEL_FILE}"
+        else
+          echo "❌ No kernel binary found in release assets!"
+          exit 1
+        fi
         
         # Check if ISO exists
         if ls release-assets/level-os-*.iso 1> /dev/null 2>&1; then
-          ISO_FILE=$(ls release-assets/level-os-*.iso | head -1 | basename)
+          ISO_PATH=$(ls release-assets/level-os-*.iso | head -1)
+          ISO_FILE=$(basename "$ISO_PATH")
           echo "iso_file=${ISO_FILE}" >> $GITHUB_OUTPUT
           echo "has_iso=true" >> $GITHUB_OUTPUT
           echo "ISO file: ${ISO_FILE}"
