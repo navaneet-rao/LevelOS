@@ -8,10 +8,14 @@ on:
   schedule:
     - cron: '22 1 * * 6'  # Weekly scan on Saturdays
 
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   analyze:
     name: Analyze
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     timeout-minutes: 360
     permissions:
       actions: read
@@ -31,6 +35,19 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
+    - name: Cache CodeQL packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/codeql
+        key: codeql-${{ runner.os }}-${{ matrix.language }}
+        restore-keys: |
+          codeql-${{ runner.os }}-
+
+    - name: Install build dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential nasm gcc-multilib grub-pc-bin grub-common xorriso qemu-system-x86
+
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v3
       with:
@@ -42,26 +59,18 @@ jobs:
         # For more details on CodeQL's query packs, refer to: https://docs.github.com/en/code-security/code-scanning/automatically-scanning-your-code-for-vulnerabilities-and-errors/configuring-code-scanning#using-queries-in-ql-packs
         # queries: security-extended,security-and-quality
 
-    - name: Check Dependencies for Build
-      run: |
-        echo "Checking build dependencies for CodeQL analysis..."
-        
-        # Check if core build tools are available
-        if ! command -v gcc >/dev/null 2>&1 || ! command -v nasm >/dev/null 2>&1; then
-          echo "Essential build tools missing, CodeQL analysis may be limited"
-          echo "Installing basic dependencies..."
-          # Try to install without sudo first, fall back if needed
-          if ! apt update 2>/dev/null && ! sudo apt update 2>/dev/null; then
-            echo "Cannot update package lists"
-          fi
-          
-          if ! apt install -y build-essential nasm 2>/dev/null && ! sudo apt install -y build-essential nasm 2>/dev/null; then
-            echo "Cannot install build dependencies, proceeding with limited analysis"
-          fi
-        fi
-
     - name: Autobuild
+      id: autobuild
       uses: github/codeql-action/autobuild@v3
+      continue-on-error: true
+
+    - name: Manual build
+      if: steps.autobuild.outcome == 'failure'
+      run: |
+        echo "CodeQL autobuild failed; running manual build steps"
+        make clean
+        make lib
+        make
       # ℹ️ Command-line programs to run using the OS shell.
       # 📚 See https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsrun
 
