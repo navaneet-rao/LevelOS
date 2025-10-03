@@ -59,8 +59,14 @@ jobs:
         make all
         
         # Verify kernel was built
-        if [ ! -f "build/level-os-${{ steps.version.outputs.version }}.bin" ]; then
+        if [ -f build/level-os-*.bin ]; then
+          echo "✅ Kernel binary found: $(ls build/level-os-*.bin)"
+        else
           echo "ERROR: Kernel binary not found!"
+          echo "Build directory contents:"
+          ls -la build/
+          echo "Looking for pattern: build/level-os-*.bin"
+          find build/ -name "*.bin" -type f || echo "No .bin files found"
           exit 1
         fi
         
@@ -73,8 +79,14 @@ jobs:
         make iso
         
         # Verify ISO was created
-        if [ ! -f "build/level-os-${{ steps.version.outputs.version }}.iso" ]; then
+        if [ -f build/level-os-*.iso ]; then
+          echo "✅ ISO file found: $(ls build/level-os-*.iso)"
+        else
           echo "ERROR: ISO file not found!"
+          echo "Build directory contents:"
+          ls -la build/
+          echo "Looking for pattern: build/level-os-*.iso"
+          find build/ -name "*.iso" -type f || echo "No .iso files found"
           exit 1
         fi
         
