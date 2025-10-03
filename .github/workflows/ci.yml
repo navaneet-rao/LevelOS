@@ -48,6 +48,8 @@ jobs:
   build:
     runs-on: self-hosted
     needs: code-quality  # Wait for code quality to pass
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     
     steps:
     - name: Checkout Repository
@@ -111,6 +113,7 @@ jobs:
         # Clean version string of any special characters
         VERSION=$(echo "$VERSION" | tr -d '\r\n\t ' | sed 's/[^0-9.]//g')
         echo "VERSION=${VERSION}" >> $GITHUB_ENV
+        echo "version=${VERSION}" >> $GITHUB_OUTPUT
         echo "Building LevelOS v${VERSION}"
         
     - name: Clean Build Environment
@@ -127,16 +130,54 @@ jobs:
     - name: Build Kernel
       run: |
         echo "Building LevelOS kernel..."
-        make
-        echo "Kernel build completed successfully"
+        if make; then
+          echo "Kernel build completed successfully"
+          
+          # Verify the kernel was actually created
+          if [ -f build/level-os-*.bin ]; then
+            echo "✅ Kernel binary created: $(ls build/level-os-*.bin)"
+            ls -la build/level-os-*.bin
+          else
+            echo "❌ Kernel binary not found after build!"
+            echo "Build directory contents:"
+            ls -la build/
+            exit 1
+          fi
+        else
+          echo "❌ Kernel build failed!"
+          exit 1
+        fi
+        
+    - name: Verify Build Artifacts
+      run: |
+        echo "Verifying build artifacts before upload..."
+        
+        # Wait a moment for any lingering processes
+        sleep 2
+        
+        echo "Build directory contents:"
+        ls -la build/
+        
+        echo "Looking for kernel binary:"
+        if ls build/level-os-*.bin 1> /dev/null 2>&1; then
+          echo "✅ Found kernel binary:"
+          ls -la build/level-os-*.bin
+        else
+          echo "❌ No kernel binary found!"
+          echo "Available files in build/:"
+          find build/ -type f | head -10
+          exit 1
+        fi
+        
+        echo "Checking build directory structure:"
+        find build/ -type f | head -10
         
     - name: Upload Build Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: levelos-build-${{ env.VERSION }}
+        name: levelos-build-${{ steps.version.outputs.version }}
         path: |
-          build/level-os-*.bin
-          build/obj/
+          build/
         retention-days: 7
 
   # Job 3: Create Bootable ISO
@@ -148,20 +189,10 @@ jobs:
     - name: Checkout Repository
       uses: actions/checkout@v4
         
-    - name: Get Version Information
-      run: |
-        MAJOR=$(grep "VERSION_MAJOR = " Makefile | cut -d' ' -f3 | tr -d '\r\n' | tr -d ' ')
-        MINOR=$(grep "VERSION_MINOR = " Makefile | cut -d' ' -f3 | tr -d '\r\n' | tr -d ' ')
-        PATCH=$(grep "VERSION_PATCH = " Makefile | cut -d' ' -f3 | tr -d '\r\n' | tr -d ' ')
-        VERSION="${MAJOR}.${MINOR}.${PATCH}"
-        # Clean version string of any special characters
-        VERSION=$(echo "$VERSION" | tr -d '\r\n\t ' | sed 's/[^0-9.]//g')
-        echo "VERSION=${VERSION}" >> $GITHUB_ENV
-        
     - name: Download Build Artifacts
       uses: actions/download-artifact@v4
       with:
-        name: levelos-build-${{ env.VERSION }}
+        name: levelos-build-${{ needs.build.outputs.version }}
         path: build/
         
     - name: Fix File Permissions
@@ -199,7 +230,7 @@ jobs:
     - name: Upload ISO Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: levelos-iso-${{ env.VERSION }}
+        name: levelos-iso-${{ needs.build.outputs.version }}
         path: build/level-os-*.iso
         retention-days: 7
 
@@ -212,20 +243,10 @@ jobs:
     - name: Checkout Repository
       uses: actions/checkout@v4
         
-    - name: Get Version Information
-      run: |
-        MAJOR=$(grep "VERSION_MAJOR = " Makefile | cut -d' ' -f3 | tr -d '\r\n' | tr -d ' ')
-        MINOR=$(grep "VERSION_MINOR = " Makefile | cut -d' ' -f3 | tr -d '\r\n' | tr -d ' ')
-        PATCH=$(grep "VERSION_PATCH = " Makefile | cut -d' ' -f3 | tr -d '\r\n' | tr -d ' ')
-        VERSION="${MAJOR}.${MINOR}.${PATCH}"
-        # Clean version string of any special characters
-        VERSION=$(echo "$VERSION" | tr -d '\r\n\t ' | sed 's/[^0-9.]//g')
-        echo "VERSION=${VERSION}" >> $GITHUB_ENV
-        
     - name: Download Build Artifacts
       uses: actions/download-artifact@v4
       with:
-        name: levelos-build-${{ env.VERSION }}
+        name: levelos-build-${{ needs.build.outputs.version }}
         path: build/
         
     - name: Run Unit Tests
@@ -267,10 +288,13 @@ jobs:
         make info
         
         # Check if kernel binary exists
-        if [ -f "levelos-build-"*/level-os-*.bin ]; then
+        if [ -f "levelos-build-"*/level-os-*.bin ] || [ -f "build/level-os-"*.bin ]; then
           echo "✓ Kernel binary created"
         else
           echo "✗ Kernel binary missing"
+          echo "Available files:"
+          find . -name "*.bin" 2>/dev/null || echo "No .bin files found"
+          ls -la levelos-build-*/ 2>/dev/null || echo "No build artifacts directory"
           exit 1
         fi
         
