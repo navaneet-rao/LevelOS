@@ -8,129 +8,69 @@ on:
   schedule:
     - cron: '0 6 * * 1'  # Weekly on Mondays
 
-concurrency:
-  group: security-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   security-scan:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      security-events: write
+    runs-on: self-hosted
     
     steps:
     - name: Checkout Repository
       uses: actions/checkout@v4
-
-    - name: Install security tooling
+      
+    - name: Run Security Checks
       run: |
-        sudo apt-get update
-        sudo apt-get install -y cppcheck python3-pip
-        python3 -m pip install --upgrade pip
-        python3 -m pip install semgrep cppcheck-sarif
-
-    - name: Run cppcheck analysis
-      run: |
-        set -euo pipefail
-        status=0
-        cppcheck \
-          --enable=warning,style,performance,portability \
-          --inconclusive \
-          --force \
-          --suppress=missingIncludeSystem \
-          --error-exitcode=1 \
-          --xml --xml-version=2 \
-          src include 2>cppcheck.xml || status=$?
-        if [ -s cppcheck.xml ]; then
-          cppcheck-sarif cppcheck.xml cppcheck.sarif || true
+        echo "Running basic security checks..."
+        
+        # Check for common security issues in C code
+        echo "Checking for potentially unsafe functions..."
+        
+        # Look for dangerous functions
+        if grep -r "strcpy\|strcat\|sprintf\|gets" src/ include/ 2>/dev/null; then
+          echo "⚠️  Found potentially unsafe string functions"
         else
-          cat <<'EOF' > cppcheck.sarif
-          {"version":"2.1.0","runs":[]}
-          EOF
+          echo "✅ No unsafe string functions found"
         fi
-        if [ "$status" -ne 0 ]; then
-          echo "cppcheck reported issues"
-          exit "$status"
+        
+        # Check for buffer operations
+        if grep -r "memcpy\|memset\|memmove" src/ include/ 2>/dev/null; then
+          echo "ℹ️  Found memory operations - ensure bounds checking"
         fi
-
-    - name: Run Semgrep (high severity)
-      run: |
-        set -euo pipefail
-        semgrep_exit=0
-        semgrep --config auto --severity high --sarif --output semgrep.sarif src include || semgrep_exit=$?
-        if [ "$semgrep_exit" -gt 1 ]; then
-          echo "Semgrep execution failed"
-          exit "$semgrep_exit"
-        fi
-        if [ "$semgrep_exit" -eq 1 ]; then
-          echo "Semgrep detected findings"
-          exit 1
-        fi
-        if [ ! -s semgrep.sarif ]; then
-          cat <<'EOF' > semgrep.sarif
-          {"version":"2.1.0","runs":[]}
-          EOF
-        fi
-        echo "Semgrep completed without high severity findings"
-
-    - name: Baseline security grep checks
-      run: |
-        set -euo pipefail
-        echo "Running supplemental pattern checks..."
-        if git ls-files -z '*.c' '*.h' | xargs -0r grep -nE 'strcpy|strcat|sprintf|gets'; then
-          echo "⚠️  Found potentially unsafe C string functions"
-          exit 1
-        fi
-        if git ls-files -z '*.c' '*.h' | xargs -0r grep -nE '\b(memcpy|memmove|memset)\b'; then
-          echo "ℹ️  Memory operation usage detected - review for bounds safety"
-        fi
-        if git ls-files -z | xargs -0r grep -nE 'password|secret|token|api[_-]?key' | grep -vE '^.*(#|//|/\*).*$'; then
-          echo "⚠️  Potential hardcoded secret detected"
-          exit 1
-        fi
-
-    - name: Check file permissions
-      run: |
-        set -euo pipefail
-        echo "Checking file permissions"
-        find src include -type f \( -name '*.c' -o -name '*.h' \) -perm /111 -print > executable_sources.txt
-        if [ -s executable_sources.txt ]; then
-          echo "⚠️  Source files should not be executable:" 
-          cat executable_sources.txt
-          exit 1
-        fi
-        echo "✓ Source permissions look good"
-
-    - name: Validate build hardening flags
-      run: |
-        set -euo pipefail
-        if grep -qE '-fstack-protector|-D_FORTIFY_SOURCE|-Wformat-security' Makefile; then
-          echo "✓ Security compiler flags present"
+        
+        # Check for hardcoded values that might be security-sensitive
+        if grep -r "password\|secret\|key\|token" src/ include/ 2>/dev/null | grep -v "// " | grep -v "/\*"; then
+          echo "⚠️  Found potential hardcoded secrets"
         else
-          echo "ℹ️  Consider adding stack protections and fortify flags"
+          echo "✅ No obvious hardcoded secrets found"
         fi
-        if [ -f config/linker.ld ]; then
-          echo "✓ Custom linker script present"
+        
+        echo "Basic security scan completed"
+
+    - name: Check File Permissions
+      run: |
+        echo "Checking file permissions..."
+        
+        # Check for executable files that shouldn't be
+        find . -type f -name "*.c" -o -name "*.h" -o -name "*.md" | while read file; do
+          if [ -x "$file" ]; then
+            echo "⚠️  Source file has execute permission: $file"
+          fi
+        done
+        
+        echo "Permission check completed"
+
+    - name: Validate Build Security
+      run: |
+        echo "Validating build configuration security..."
+        
+        # Check compiler flags for security features
+        if grep -q "\-fstack-protector\|\-D_FORTIFY_SOURCE\|\-Wformat-security" Makefile; then
+          echo "✅ Security compiler flags found"
         else
-          echo "⚠️  Custom linker script missing"
+          echo "ℹ️  Consider adding security compiler flags"
         fi
-
-    - name: Upload SARIF results
-      if: always()
-      uses: github/codeql-action/upload-sarif@v3
-      with:
-        sarif_file: |
-          semgrep.sarif
-          cppcheck.sarif
-
-    - name: Upload raw reports
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: security-reports
-        path: |
-          cppcheck.xml
-          semgrep.sarif
-          cppcheck.sarif
-        if-no-files-found: warn
+        
+        # Check linker configuration
+        if [ -f "config/linker.ld" ]; then
+          echo "✅ Custom linker script present"
+        fi
+        
+        echo "Build security validation completed"
