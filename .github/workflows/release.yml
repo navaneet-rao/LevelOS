@@ -29,10 +29,12 @@ jobs:
       id: version
       run: |
         # Extract version from Makefile
-        MAJOR=$(grep "VERSION_MAJOR = " Makefile | cut -d' ' -f3)
-        MINOR=$(grep "VERSION_MINOR = " Makefile | cut -d' ' -f3)
-        PATCH=$(grep "VERSION_PATCH = " Makefile | cut -d' ' -f3)
+        MAJOR=$(grep "VERSION_MAJOR = " Makefile | cut -d' ' -f3 | tr -d '\r\n' | tr -d ' ')
+        MINOR=$(grep "VERSION_MINOR = " Makefile | cut -d' ' -f3 | tr -d '\r\n' | tr -d ' ')
+        PATCH=$(grep "VERSION_PATCH = " Makefile | cut -d' ' -f3 | tr -d '\r\n' | tr -d ' ')
         VERSION="${MAJOR}.${MINOR}.${PATCH}"
+        # Clean version string of any special characters
+        VERSION=$(echo "$VERSION" | tr -d '\r\n\t ' | sed 's/[^0-9.]//g')
         
         # Get commit info
         COMMIT_SHORT=$(git rev-parse --short HEAD)
@@ -91,7 +93,8 @@ jobs:
         fi
         
         # Get ISO size
-        ISO_SIZE=$(ls -lh build/level-os-${{ steps.version.outputs.version }}.iso | awk '{print $5}')
+        ISO_FILE=$(ls build/level-os-*.iso | head -1)
+        ISO_SIZE=$(ls -lh "$ISO_FILE" | awk '{print $5}')
         echo "ISO created successfully: ${ISO_SIZE}"
         
     - name: Run Tests
@@ -105,10 +108,10 @@ jobs:
         mkdir -p release-assets
         
         # Copy kernel binary
-        cp build/level-os-${{ steps.version.outputs.version }}.bin release-assets/
+        cp build/level-os-*.bin release-assets/
         
         # Copy ISO file
-        cp build/level-os-${{ steps.version.outputs.version }}.iso release-assets/
+        cp build/level-os-*.iso release-assets/
         
         # Create checksums
         cd release-assets
@@ -230,6 +233,20 @@ jobs:
         git tag -a v${{ steps.version.outputs.version }} -m "LevelOS v${{ steps.version.outputs.version }} - Automated Release"
         git push origin v${{ steps.version.outputs.version }}
         
+    - name: Get Asset Filenames
+      if: steps.check_release.outputs.exists == 'false'
+      id: assets
+      run: |
+        # Get actual filenames for upload
+        KERNEL_FILE=$(ls release-assets/level-os-*.bin | head -1 | basename)
+        ISO_FILE=$(ls release-assets/level-os-*.iso | head -1 | basename)
+        
+        echo "kernel_file=${KERNEL_FILE}" >> $GITHUB_OUTPUT
+        echo "iso_file=${ISO_FILE}" >> $GITHUB_OUTPUT
+        
+        echo "Kernel file: ${KERNEL_FILE}"
+        echo "ISO file: ${ISO_FILE}"
+        
     - name: Create GitHub Release
       if: steps.check_release.outputs.exists == 'false'
       uses: actions/create-release@v1
@@ -250,8 +267,8 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./release-assets/level-os-${{ steps.version.outputs.version }}.bin
-        asset_name: level-os-${{ steps.version.outputs.version }}.bin
+        asset_path: ./release-assets/${{ steps.assets.outputs.kernel_file }}
+        asset_name: ${{ steps.assets.outputs.kernel_file }}
         asset_content_type: application/octet-stream
         
     - name: Upload Bootable ISO
@@ -261,8 +278,8 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./release-assets/level-os-${{ steps.version.outputs.version }}.iso
-        asset_name: level-os-${{ steps.version.outputs.version }}.iso
+        asset_path: ./release-assets/${{ steps.assets.outputs.iso_file }}
+        asset_name: ${{ steps.assets.outputs.iso_file }}
         asset_content_type: application/x-iso9660-image
         
     - name: Upload Checksums
